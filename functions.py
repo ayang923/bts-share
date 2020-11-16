@@ -21,7 +21,7 @@ def load_net(cfg_path, net_weights): #configuration file path, network weights f
     return net #returns network object
 
 #performs detection with neural network
-def detect(net, im, confThreshold = 0.5, inpWidth=320, inpHeight=320):
+def detect(net, im, confThreshold = 0.75, inpWidth=320, inpHeight=320):
     in_blob = cv.dnn.blobFromImage(im, 1/255, (inpWidth, inpHeight), [0,0,0], 1, crop=False)
 
     net.setInput(in_blob)
@@ -30,7 +30,7 @@ def detect(net, im, confThreshold = 0.5, inpWidth=320, inpHeight=320):
     pred = np.array(pred) #converts into numpy array
     pred = np.concatenate([np.array(i) for i in pred]) #reshapes into 1 dimension array
 
-    final_im = postprocess(im, pred)
+    final_im = postprocess(im, pred, confThreshold)
     return final_im #returns post processed result - center_x and center_y
 
 #gets name of layers with unconnected outputs, i.e. output layers
@@ -39,7 +39,7 @@ def getOutputsNames(net):
     return [layersNames[i[0] - 1] for i in net.getUnconnectedOutLayers()]
 
 #postprocesses network results -- nms, results post predictions
-def postprocess(frame, pred, confThreshold=0.5):
+def postprocess(frame, pred, confThreshold=0.75):
     fHeight = frame.shape[0] #height of frame
     fWidth = frame.shape[1] #width of frame
     
@@ -49,6 +49,7 @@ def postprocess(frame, pred, confThreshold=0.5):
     
     logger.debug("Frame Height: {}".format(fHeight))
     logger.debug("Frame Width: {}".format(fWidth))
+    logger.debug("Confidence Threshold: {}".format(confThreshold))
     
     while pred.size > 0:
         hc_i = np.argmax(pred, axis=0)[5] #highest confidence index
@@ -71,10 +72,14 @@ def checkOverlap(x_box, w_box, x_test):
 def pred_circle(x_coord, y_coord, im, color): #color is rgb tuple
     cv.circle(im, (x_coord, y_coord), 10, color, 4)
     
+def show_im(im):
     #shows image
     cv.imshow('frame', im)
     cv.waitKey(0)
     cv.destroyAllWindows()
+    
+def get_dim(im):
+    return (im.shape[0], im.shape[1])
 
 def main():
     net = load_net("yolov3-tiny-obj.cfg", "yolov3-tiny-obj_final.weights")
