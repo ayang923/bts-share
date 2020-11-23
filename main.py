@@ -18,22 +18,19 @@ video_source = "testVid.mov"
 confThreshold = 0.3
 disThreshold = 200
 
-'''def vel_pred(detections):
+def vel_pred(detections, prev_X, prev_T):
     Xtime = time.time() - startTime
     if len(detections) != 0:
         for detection in detections:
-            if len(X) >= 2:
-                delta_t = Xtime - T[-2]
-                logger.info(delta_t)
-                P.append(X[-2]+v*delta_t)
+            delta_t = Xtime - prev_X
+            logger.info("Change in time: {}".format(delta_t))
+            P = prev_X+v*delta_t
                     
-                #update v
-                v = (detection[0] - X[-2])/(delta_t)
+            #update v and return it
+            v = (detection[0] - prev_X)/(delta_t)
 
-            #saving X vs T in present time
-            if math.dist(P[-2])
-            X.append(detection[0])
-            T.append(Xtime)'''
+    return v
+
 
 def main():
     net = load_net("yolov3-tiny-obj.cfg", "yolov3-tiny-obj_final.weights")
