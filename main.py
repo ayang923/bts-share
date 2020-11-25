@@ -16,20 +16,39 @@ logger = logging.getLogger(__name__)
 video_source = "testVid.mov"
 
 confThreshold = 0.3
-disThreshold = 200
+exmpt_disThreshold = 50
 
-def vel_pred(detections, prev_X, prev_T):
-    Xtime = time.time() - startTime
-    if len(detections) != 0:
-        for detection in detections:
-            delta_t = Xtime - prev_X
-            logger.info("Change in time: {}".format(delta_t))
-            P = prev_X+v*delta_t
-                    
-            #update v and return it
-            v = (detection[0] - prev_X)/(delta_t)
+def vel_pred(detection, prev_x, prev_t, t, v):
+    delta_t = t - prev_t
+    logger.info("Change in time: {}".format(delta_t))
 
-    return v
+    #update v and p and return it
+    v = (detection[0] - prev_x)/(delta_t)
+    p = detection[0]+v*delta_t
+
+    logger.info("v:{}\np:{}\nt:{}".format(v, p, t))
+
+    return v, p #returns velocity and prediction
+
+def angle(x, y, z): #tuples with coordinates
+    yx = np.subtract(x, y)
+    yz = np.subtract(z, y)
+    
+    cosa = np.dot(yx, yz)/(np.linalg.norm(yx)*np.linalg.norm(yz))
+    a = math.degrees(math.acos(cosa))
+    
+    return a
+
+def coord_norm(x, y, z, frame_x):
+    xyz = np.vstack((x, y, z))[:, 1]
+    
+    low = xyz.min()
+    high = xyz.max()
+    r = high - low #range
+
+    normalized = ((0, (x[1])/frame_x), ((y[0]-x[0])/(z[0]-x[0]), (y[1])/frame_x), (1, (z[1])/frame_x))
+    
+    return normalized
 
 
 def main():
@@ -42,8 +61,9 @@ def main():
 
     count = 0 #number of iterations
     X = [] #xpositions
-    T = [] #times
     P = [] #predictions
+    T = [] #times
+    delta_angles = [] #angle differences
 
     startTime = time.time()
     v = 0 #velocity
@@ -56,28 +76,35 @@ def main():
 
         #performs detection
         detections = detect(net, frame, confThreshold)
-        Xtime = time.time() - startTime
+        
         if len(detections) != 0:
-            for detection in detections:
-                if len(X) >= 2:
-                    delta_t = Xtime - T[-1]
-                    logger.info(delta_t)
-                    P.append(X[-1]+v*delta_t)
+            X.append(detections[0][0])
+            T.append(time.time() - startTime)
+            logger.info("Detection: {}".format(detections))
+ 
+        if len(X) >= 2 and len(detections) != 0:
+
+            if len(X) % 2 == 0:
+                if len(X) >=4:    
+                    x_norm, y_norm, z_norm = coord_norm((T[-3], X[-3]), (T[-2], X[-2]), (T[-1], X[-1]), 1280)
+                    xp_norm, yp_norm, zp_norm = coord_norm((T[-3], X[-3]), (T[-2], P[-1]), (T[-1], X[-1]), 1280)
+
+                    a_actual = angle(x_norm, y_norm, z_norm)
+                    a_pred = angle(xp_norm, yp_norm, zp_norm)
+                    delta_angle = a_actual - a_pred
+                    delta_angles.append(delta_angle)
+                    logger.info("angle between prediction and points: {}-{} = {}".format(a_actual, a_pred, delta_angle))
                     
-                    #update v
-                    v = (detection[0] - X[-1])/(delta_t)
+                    if delta_angle < -50:
+                        X[-2] = P[-1]
 
-                #saving X vs T in present time
-                X.append(detection[0])
-                T.append(Xtime)
+                v, p = vel_pred(detections[0], X[-2], T[-2], T[-1], v)
+                P.append(p) # velocity predictions
                 
-                #velocity calculation and predicitons
-                
-
+            
         #Display the resulting frame
         for detection in detections:
             pred_circle(detection[0], detection[1], frame, (255, 0, 0))
-        logger.info("Detection: {}".format(detections))
         cv.imshow('frame', frame)
         if cv.waitKey(1) == ord('q'):
             break
@@ -88,13 +115,15 @@ def main():
     cap.release()
     cv.destroyAllWindows()
     
-    logger.debug("X: {}".format(X))
-    logger.info("T: {}".format(len(T[2:])))
+    logger.info("X: {}".format(len(X)))
+    logger.info("T: {}".format(len(T)))
     logger.info("P: {}".format(len(P)))
+    logger.info("Angles: {}".format(len(delta_angles)))
     
     plt.figure(figsize=(12, 5))
     plt.scatter(T, X)
-    plt.scatter(T[2:], P, c='r')
+    #plt.scatter(T[2::2], P[:-1], c='r')
+    #plt.scatter(T[2::2], delta_angles, c='g')
     plt.xlabel("Time")
     plt.ylabel("X Position")
     plt.title("Time vs X Position")
