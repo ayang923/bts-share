@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 video_source = "testVid.mov"
 
 confThreshold = 0.3
-exmpt_disThreshold = 50
+angleThreshold = 30 #difference in angles
+exmpt_disThreshold = 50 #exempts noise
 
 def vel_pred(detection, prev_x, prev_t, t, v):
     delta_t = t - prev_t
@@ -50,6 +51,16 @@ def coord_norm(x, y, z, frame_x):
     
     return normalized
 
+def angle_prediction(coord1, coord2, coord3, pred, fwidth):
+    x_norm, y_norm, z_norm = coord_norm(coord1, coord2, coord3, fwidth)
+    xp_norm, yp_norm, zp_norm = coord_norm(coord1, pred, coord3, fwidth)
+
+    a_actual = angle(x_norm, y_norm, z_norm)
+    a_pred = angle(xp_norm, yp_norm, zp_norm)
+    delta_angle = a_actual - a_pred
+    logger.info("actual ({}) - prediction ({}) = {}".format(a_actual, a_pred, delta_angle))
+    
+    return delta_angle
 
 def main():
     net = load_net("yolov3-tiny-obj.cfg", "yolov3-tiny-obj_final.weights")
@@ -86,16 +97,9 @@ def main():
 
             if len(X) % 2 == 0:
                 if len(X) >=4:    
-                    x_norm, y_norm, z_norm = coord_norm((T[-3], X[-3]), (T[-2], X[-2]), (T[-1], X[-1]), 1280)
-                    xp_norm, yp_norm, zp_norm = coord_norm((T[-3], X[-3]), (T[-2], P[-1]), (T[-1], X[-1]), 1280)
-
-                    a_actual = angle(x_norm, y_norm, z_norm)
-                    a_pred = angle(xp_norm, yp_norm, zp_norm)
-                    delta_angle = a_actual - a_pred
-                    delta_angles.append(delta_angle)
-                    logger.info("angle between prediction and points: {}-{} = {}".format(a_actual, a_pred, delta_angle))
+                    delta_angle = angle_prediction((T[-3], X[-3]), (T[-2], X[-2]), (T[-1], X[-1]), (T[-2], P[-1]), 1280)
                     
-                    if delta_angle < -50:
+                    if delta_angle < -angleThreshold:
                         X[-2] = P[-1]
 
                 v, p = vel_pred(detections[0], X[-2], T[-2], T[-1], v)
