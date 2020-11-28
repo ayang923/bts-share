@@ -79,6 +79,7 @@ def main():
     startTime = time.time()
     v = 0 #velocity
     while True:
+
         #reads frame
         ret, frame = cap.read()
         if not ret:
@@ -88,17 +89,34 @@ def main():
         #performs detection
         detections = detect(net, frame, confThreshold)
         
+        logger.info("\nCount: {}\n".format(len(X)))
+        
         if len(detections) != 0:
-            X.append(detections[0][0])
-            T.append(time.time() - startTime)
+            T.append(time.time() - startTime) #appends time
+
+            index = 0
+            if len(X) % 2 == 0 and len(X) >= 4:
+                angles = [angle((T[-3], X[-2]), (T[-2], P[-1]), (T[-1], detection[0])) for detection in detections]
+                
+                index = angles.index(max(angles))
+                
+                logger.info("Angles: {}".format(angles))
+                
+            if len(X) % 2 == 1 and len(X) >= 3:
+                distances = [P[-1] - detection[0] for detection in detections]
+                
+                index = distances.index(min(distances))
+                logger.info("Distances: {}".format(distances))
+                
+            X.append(detections[index][0])
             logger.info("Detection: {}".format(detections))
  
         if len(X) >= 2 and len(detections) != 0:
-
+        
+            
             if len(X) % 2 == 0:
-                if len(X) >=4:    
-                    delta_angle = angle_prediction((T[-3], X[-3]), (T[-2], X[-2]), (T[-1], X[-1]), (T[-2], P[-1]), 1280)
-                    
+                if len(X) >=4:   
+                    delta_angle = angle_prediction((T[-3], X[-3]), (T[-2], X[-2]), (T[-1], X[-2]), (T[-2], P[-1]), 1280)
                     if delta_angle < -angleThreshold:
                         X[-2] = P[-1]
 
@@ -110,7 +128,7 @@ def main():
         for detection in detections:
             pred_circle(detection[0], detection[1], frame, (255, 0, 0))
         cv.imshow('frame', frame)
-        if cv.waitKey(1) == ord('q'):
+        if cv.waitKey(1) & 0xFF == ord('q'):
             break
 
         count += 1 #increase count
